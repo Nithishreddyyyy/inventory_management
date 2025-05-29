@@ -1,76 +1,73 @@
 package gui;
 
+import db.UserDAO;
+import models.User;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.sql.*;
 
 public class LoginFrame extends JFrame {
-    private JPanel panelMain;
     private JTextField usernameField;
     private JPasswordField passwordField;
     private JButton loginButton;
+    private UserDAO userDAO;
+    public static User loggedInUser; // Store logged-in user globally
 
     public LoginFrame() {
-        setTitle("Login");
-        setSize(400, 200);
-        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        userDAO = new UserDAO();
+        setTitle("Inventory Management - Login");
+        setSize(350, 200);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
+        setLayout(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
 
-        // ✅ Build UI manually
-        panelMain = new JPanel(new GridLayout(3, 2, 10, 10));
-        usernameField = new JTextField();
-        passwordField = new JPasswordField();
+        gbc.gridx = 0; gbc.gridy = 0; add(new JLabel("Username:"), gbc);
+        usernameField = new JTextField(15); gbc.gridx = 1; add(usernameField, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 1; add(new JLabel("Password:"), gbc);
+        passwordField = new JPasswordField(15); gbc.gridx = 1; add(passwordField, gbc);
+
         loginButton = new JButton("Login");
+        gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 2; gbc.anchor = GridBagConstraints.CENTER;
+        add(loginButton, gbc);
 
-        panelMain.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
-        panelMain.add(new JLabel("Username:"));
-        panelMain.add(usernameField);
-        panelMain.add(new JLabel("Password:"));
-        panelMain.add(passwordField);
-        panelMain.add(new JLabel());
-        panelMain.add(loginButton);
-
-        setContentPane(panelMain);
-        setVisible(true);
-
-        loginButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                authenticateUser();
-            }
-        });
+        loginButton.addActionListener(this::handleLogin);
+        passwordField.addActionListener(this::handleLogin); // Login on Enter in password field
     }
 
-    private void authenticateUser() {
-        String username = usernameField.getText();
+    private void handleLogin(ActionEvent e) {
+        String username = usernameField.getText().trim();
         String password = new String(passwordField.getPassword());
 
-        try (Connection conn = DriverManager.getConnection(
-                "jdbc:mysql://localhost:3306/inventory_db", "root", "test1234")) {
+        if (username.isEmpty() || password.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Username and password cannot be empty.", "Login Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
 
-            String sql = "SELECT * FROM users WHERE username = ? AND password = ?";
-            PreparedStatement stmt = conn.prepareStatement(sql);
-            stmt.setString(1, username);
-            stmt.setString(2, password);
+        User user = userDAO.getUserByUsername(username);
 
-            ResultSet rs = stmt.executeQuery();
-
-            if (rs.next()) {
-                JOptionPane.showMessageDialog(this, "Login successful!");
-                // TODO: Open main dashboard frame
-            } else {
-                JOptionPane.showMessageDialog(this, "Invalid username or password.");
-            }
-
-        } catch (SQLException ex) {
-            ex.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Database error: " + ex.getMessage());
+        // DANGER: Plain text password comparison. Use hashing in real applications!
+        if (user != null && user.getPassword().equals(password)) {
+            loggedInUser = user;
+            JOptionPane.showMessageDialog(this, "Login Successful! Welcome " + user.getUsername(), "Success", JOptionPane.INFORMATION_MESSAGE);
+            this.dispose();
+            SwingUtilities.invokeLater(() -> new MainDashboard().setVisible(true));
+        } else {
+            JOptionPane.showMessageDialog(this, "Invalid username or password.", "Login Failed", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(LoginFrame::new);
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        SwingUtilities.invokeLater(() -> new LoginFrame().setVisible(true));
     }
 }
